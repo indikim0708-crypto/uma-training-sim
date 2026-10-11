@@ -2,6 +2,7 @@ import { FRIENDSHIP_TRAINING_CHANCE, FRIENDSHIP_TRAINING_MULTIPLIER, trainings }
 import { gradeGrowthMultiplier, placementGrowthMultiplier } from '../data/races.js'
 import { phaseTrainingMultiplier, STAT_MAX } from '../data/seasons.js'
 import { leadGroupLimit, raceStrategies, wisdomChance } from '../data/raceStrategies.js'
+import { pickRaceCommentary, pickSpecificVictory, raceSpecificVictory } from '../data/raceCommentary.js'
 
 export const CONDITIONS = ['최악', '저조', '보통', '양호', '최상']
 export const months = ['1월', '2월', '3월', '4월', '5월', '6월']
@@ -113,6 +114,10 @@ function analyzeLoss({ game, race, finish, lateStart, recoverySuccess, leadLimit
   return { primaryLossReason, secondaryLossReason: null, lateStartOccurred: lateStart, lateStartRecoverySucceeded: recoverySuccess, leadGroupLimit: leadLimit, staminaDeficit, statDeficits, conditionPenalty, randomFactor }
 }
 
+const clampRank = (rank, entrants) => Math.max(1, Math.min(entrants, rank))
+const moveRank = (from, to, fraction, entrants) => clampRank(Math.round(from + (to - from) * fraction), entrants)
+const positionChange = (previous, current) => current < previous ? 'up' : current > previous ? 'down' : 'hold'
+
 export function simulateRace(game, race) {
   const conditionBonus = getConditionIndex(game.condition) * 7
   const base = Object.entries(race.statWeights).reduce((sum, [stat, weight]) => sum + game.stats[stat] * weight, 0)
@@ -123,6 +128,7 @@ export function simulateRace(game, race) {
   const lateStart = Math.random() < wisdomChance(strategy.lateStartChances, game.stats.Wisdom)
   const lateStartMax = Math.max(leadLimit + 1, Math.ceil(race.entrants * .75))
   const start = lateStart ? rng(leadLimit + 1, lateStartMax) : rng(1, leadLimit)
+  const early = start
   const recoverySuccess = lateStart && Math.random() < wisdomChance(strategy.recoveryChances, game.stats.Wisdom)
   const mid = lateStart ? (recoverySuccess ? rng(1, leadLimit) : Math.max(leadLimit + 1, start - rng(0, 2))) : rng(1, leadLimit)
   const randomFactor = rng(-Math.round(race.difficulty * .07), Math.round(race.difficulty * .07))
@@ -137,17 +143,32 @@ export function simulateRace(game, race) {
     if (gap > 150) finish = Math.max(finish, Math.min(race.entrants, 7))
     else if (gap > 50) finish = Math.max(finish, 4)
   }
+  const late = moveRank(mid, finish, staminaShortage ? .48 : .3, race.entrants)
+  const finalCorner = moveRank(late, finish, staminaShortage ? .62 : .48, race.entrants)
+  const finalStraight = moveRank(finalCorner, finish, .72, race.entrants)
+  const positions = { start, early, mid, late, finalCorner, finalStraight, finish }
   const raceStamina = Math.max(15, Math.min(98, 100 - Math.round((race.distanceType === 'LONG' ? 48 : 34) - game.stats.Stamina / 18)))
   const growth = calculateRaceGrowth(race, finish)
   const fans = Math.round(race.fansBase * (race.entrants - finish + 1) / race.entrants)
   const lossAnalysis = analyzeLoss({ game, race, finish, lateStart, recoverySuccess, leadLimit, randomFactor, conditionPenalty: Math.max(0, (2 - getConditionIndex(game.condition)) * 7) })
-  return { ...race, finish, score, entrants: race.entrants, growth, fans, lateStartPenalty, ...lossAnalysis, logs: [
-    { phase: '출전표', text: `${race.name} · ${race.grade} · ${race.distance}\n총 ${race.entrants}명의 우마무스메가 출전한다.\n맥퀸이 게이트 안에서 집중하고 있다.`, rank: null, stamina: null },
-    { phase: 'START', text: lateStart ? '출발이 조금 늦었다! 맥퀸이 예상보다 뒤쪽에서 레이스를 시작한다.' : '출발 신호! 맥퀸이 선두 바로 뒤에 자리를 잡는다.', rank: start, stamina: 91 },
-    { phase: '초반', text: lateStart ? '출발이 조금 늦었다!\n맥퀸이 예상보다 뒤쪽에서 레이스를 시작한다.' : '맥퀸은 좋은 출발을 보였다.\n선두 바로 뒤에 자리를 잡는다.', rank: start, stamina: 78 },
-    { phase: '중반', text: lateStart ? (recoverySuccess ? `맥퀸이 바깥쪽에서 서서히 순위를 올린다.\n선두 그룹 복귀 성공! ${start}위 → ${mid}위` : `앞이 막혀 좀처럼 자리를 잡지 못한다.\n맥퀸은 아직 중단에 머물러 있다. ${start}위 → ${mid}위`) : staminaShortage ? '선두 그룹에서 페이스를 유지하려 하지만 체력이 빠르게 떨어진다.\n스태미나 부족! 맥퀸은 호흡을 가다듬는다.' : '맥퀸은 선두 그룹에서 안정적으로 페이스를 유지하고 있다.', rank: mid, stamina: raceStamina },
-    { phase: '최종 직선', text: `맥퀸이 스퍼트를 시작했다!\n${mid}위 → ${finish}위, 선두를 추격한다!`, rank: finish, stamina: Math.max(15, raceStamina - 28) },
-    { phase: '결과', text: finish === 1 ? '맥퀸이 결승선을 가장 먼저 통과했다!' : `맥퀸이 ${finish}위로 결승선을 통과했다.`, rank: finish, stamina: 0 },
-  ] }
+  const lossId = lossAnalysis.primaryLossReason?.id
+  const victoryType = finish !== 1 ? null : finalCorner - finish >= 2 ? 'COMEBACK' : score >= race.difficulty * 1.15 ? 'DOMINANT' : !lateStart && early <= leadLimit && mid <= leadLimit ? 'FRONT_RUNNING' : Math.abs(score - race.difficulty) < race.difficulty * .08 ? 'CLOSE' : 'NORMAL'
+  const midKey = positionChange(early, mid)
+  const lateKey = staminaShortage ? 'stamina' : positionChange(mid, late) === 'up' ? 'strong' : 'neutral'
+  const cornerKey = staminaShortage || (['power', 'wisdom'].includes(lossId) && positionChange(late, finalCorner) !== 'up') ? 'blocked' : positionChange(late, finalCorner) === 'up' ? 'accelerate' : 'good'
+  const straightKey = (staminaShortage || lossId === 'speed') && positionChange(finalCorner, finalStraight) !== 'up' ? 'fade' : finalStraight === 1 ? 'lead' : positionChange(finalCorner, finalStraight) === 'up' ? 'chase' : 'hold'
+  const finishText = finish === 1
+    ? `${pickRaceCommentary('victory', victoryType === 'NORMAL' ? 'general' : victoryType)}\n${raceSpecificVictory[race.id] && Math.random() < .7 ? pickSpecificVictory(race.id) : pickRaceCommentary('victory', 'general')}`
+    : pickRaceCommentary('finish', finish === 2 ? 'second' : finish === 3 ? 'third' : finish <= 5 ? 'upper' : 'lower')
+  const logs = [
+    { phase: 'START', text: pickRaceCommentary('start', lateStart ? 'late' : 'normal'), rank: start, stamina: 100 },
+    { phase: '초반', text: pickRaceCommentary('early', lateStart ? 'rear' : 'lead'), rank: early, stamina: 88 },
+    { phase: '중반', text: pickRaceCommentary('mid', lateStart && recoverySuccess ? 'up' : midKey), rank: mid, stamina: raceStamina },
+    { phase: '후반', text: pickRaceCommentary('late', lateKey), rank: late, stamina: Math.max(20, raceStamina - 14) },
+    { phase: '최종 코너', text: pickRaceCommentary('corner', cornerKey), rank: finalCorner, stamina: Math.max(16, raceStamina - 25) },
+    { phase: '최종 직선', text: pickRaceCommentary('straight', straightKey), rank: finalStraight, stamina: Math.max(12, raceStamina - 34) },
+    { phase: 'FINISH', text: finishText, rank: finish, stamina: 0 },
+  ]
+  return { ...race, finish, score, entrants: race.entrants, growth, fans, lateStartPenalty, positions, staminaTrouble: staminaShortage, victoryType, commentaryHistory: logs.map((log) => log.text), ...lossAnalysis, logs }
 }
 
