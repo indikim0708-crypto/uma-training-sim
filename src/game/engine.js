@@ -64,7 +64,7 @@ export function applyEffects(game, effects) {
 export function calculateRaceGrowth(race, finish) {
   const placement = placementGrowthMultiplier[finish] ?? placementGrowthMultiplier.default
   const grade = gradeGrowthMultiplier[race.grade] ?? 1
-  return Object.fromEntries(Object.entries(race.growthProfile).map(([stat, base]) => [stat, Math.max(1, Math.round(base * placement * grade))]))
+  return Object.fromEntries(Object.entries(race.growthProfile).map(([stat, base]) => [stat, Math.max(1, Math.round(base * placement * grade) * 2)]))
 }
 
 const lossCopy = {
