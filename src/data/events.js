@@ -39,4 +39,34 @@ export const events = [
     { label: '모의 대결을 수락한다', hint: '파워 상승 / 근성 상승 / 체력 소모', effects: { stamina: -12, stats: { Power: 4, Guts: 4 } }, result: '팽팽한 경쟁이 더 강한 추진력이 되었다.' },
     { label: '본선에 집중한다', hint: '컨디션 상승 / 스피드 상승', effects: { condition: 1, stats: { Speed: 3 } }, result: '시선은 오직 다음 레이스를 향했다.' },
   ]},
+  { title: '맥퀸의 친구', text: '골드쉽이 맥퀸과 놀러가겠다고 한다.', choices: [
+    { label: '허락한다', hint: '좋은 시간을 보낼 수도 있다', outcomes: [
+      { weight: 50, effects: { stamina: 3, stats: { Stamina: 5 } }, result: '즐거운 외출 덕분에 맥퀸의 기분과 컨디션이 한결 가벼워졌다.' },
+      { weight: 50, effects: { stamina: -10 }, result: '골드쉽의 예측 불가한 하루에 맥퀸은 꽤 지쳐 버렸다.' },
+    ]},
+    { label: '안 된다', hint: '오늘은 훈련에 집중한다', effects: {}, result: '맥퀸은 아쉬움을 뒤로하고 오늘의 훈련에 집중했다.' },
+  ]},
+  { title: '테이오의 의지', text: '테이오의 분발을 보고 맥퀸도 흥분했다.', phases: ['CLASSIC', 'SENIOR'], choices: [
+    { label: '응원한다', hint: '의욕을 살릴 것 같다', outcomes: [
+      { weight: 50, effects: { stats: { Power: 20 } }, result: '테이오의 의지에 자극받아 강한 추진력을 얻었다.' },
+      { weight: 50, effects: { stats: { Power: 10 } }, result: '응원의 열기가 맥퀸의 발걸음에 힘을 실어 주었다.' },
+    ]},
+    { label: '진정시킨다', hint: '흥분은 금물', effects: { stamina: 10 }, result: '차분히 마음을 가라앉히며 체력을 회복했다.' },
+  ]},
+  { title: '라이스의 상담', text: '맥퀸은 라이스와 심각한 레이스 토론 중이다.', phases: ['SENIOR'], choices: [
+    { label: '조언한다', hint: '의욕을 살릴 것 같다', outcomes: [
+      { weight: 50, effects: { stats: { Speed: 10 } }, result: '서로의 의견을 나누며 더 빠른 레이스 감각을 얻었다.' },
+      { weight: 50, effects: { stats: { Power: 10 } }, result: '레이스의 핵심을 짚어 주며 추월에 필요한 힘을 다졌다.' },
+    ]},
+    { label: '아무 말 하지 않는다', hint: '침묵은 금이다', effects: { stamina: 5 }, result: '잠시 조용히 생각을 정리하며 피로를 덜었다.' },
+  ]},
+  { title: '라이언의 헬스 트레이닝', text: '맥퀸이 라이언과 근육 훈련을 하겠다고 한다.', phases: ['CLASSIC'], choices: [
+    { label: '필요하다', hint: 'PT는 효과가 있다', outcomes: [
+      { weight: 50, effects: { stats: { Stamina: 10 } }, result: '탄탄한 기초 체력을 다지며 장거리를 버틸 힘을 길렀다.' },
+      { weight: 50, effects: { stats: { Power: 10 } }, result: '라이언의 조언 덕분에 한층 강한 추진력을 얻었다.' },
+    ]},
+    { label: '불필요하다', hint: '쉬는 게 좋다', effects: { stamina: 10 }, result: '무리하지 않고 휴식을 선택해 체력을 회복했다.' },
+  ]},
 ]
+
+export const eligibleEvents = (phaseId) => events.filter((event) => !event.phases || event.phases.includes(phaseId))

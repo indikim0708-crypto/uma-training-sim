@@ -15,6 +15,17 @@ export const getConditionIndex = (condition) => CONDITIONS.indexOf(condition)
 export const conditionFrom = (condition, delta = 0) => CONDITIONS[Math.max(0, Math.min(4, getConditionIndex(condition) + delta))]
 export const statSum = (stats) => Object.values(stats).reduce((a, b) => a + b, 0)
 export const clampStats = (stats) => Object.fromEntries(Object.entries(stats).map(([stat, value]) => [stat, Math.max(0, Math.min(STAT_MAX, value))]))
+export function resolveEventChoice(choice) {
+  if (!choice.outcomes?.length) return choice
+  const totalWeight = choice.outcomes.reduce((total, outcome) => total + outcome.weight, 0)
+  let roll = Math.random() * totalWeight
+  const outcome = choice.outcomes.find((item) => {
+    if (roll < item.weight) return true
+    roll -= item.weight
+    return false
+  }) ?? choice.outcomes.at(-1)
+  return { ...choice, effects: outcome.effects, result: outcome.result }
+}
 export function trainingFailureRate(stamina) {
   if (stamina <= 0) return 100
   if (stamina <= 10) return 80
