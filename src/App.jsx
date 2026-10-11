@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { character, STAT_KEYS } from './data/character'
 import { events } from './data/events'
 import { races } from './data/races'
@@ -7,13 +7,21 @@ import { applyEffects, conditionFrom, months, rating, runTraining, simulateRace 
 const initialGame = () => ({ month: 1, stats: { ...character.stats }, stamina: 100, condition: character.condition, fans: 0, starts: 0, wins: 0, bestRank: 99, raceResults: [], logs: ['육성 준비가 완료되었습니다.'], phase: 'START', training: null, event: null, eventResult: null, race: null, raceStep: 0, paused: false })
 const addLog = (game, text) => ({ ...game, logs: [text, ...game.logs].slice(0, 5) })
 const formatEffects = (effects) => Object.entries(effects.stats ?? {}).map(([key, value]) => `${key.toUpperCase()} +${value}`).join(' · ') || '특별한 변화 없음'
+const MONTH_DURATION = 10000
 
 function App() {
   const [game, setGame] = useState(initialGame)
   const [running, setRunning] = useState(false)
+  const [progressMs, setProgressMs] = useState(0)
+  const elapsedRef = useRef(0)
+  const lastTickRef = useRef(null)
+  const advancingRef = useRef(false)
   const currentRace = races.find((race) => race.month === game.month)
   const nextRace = races.find((race) => race.month >= game.month && !game.raceResults.some((result) => result.month === race.month))
-  const timerText = running && !game.paused ? '다음 달까지 10초' : '진행 대기 중'
+  const timerActive = running && !game.paused && game.phase === 'TRAINING'
+  const remainingSeconds = Math.max(0, (MONTH_DURATION - progressMs) / 1000)
+  const progressPercent = Math.min(100, progressMs / MONTH_DURATION * 100)
+  const timerText = game.phase === 'TRAINING' ? `다음 달까지 ${remainingSeconds.toFixed(1)}초${game.paused ? ' · 일시정지' : ''}` : '월 진행 일시정지'
 
   const progressMonth = useCallback(() => {
     setGame((prev) => {
@@ -31,11 +39,42 @@ function App() {
     })
   }, [currentRace])
 
+  const resetMonthProgress = useCallback(() => {
+    elapsedRef.current = 0
+    lastTickRef.current = null
+    setProgressMs(0)
+  }, [])
+
+  const advanceMonth = useCallback(() => {
+    if (advancingRef.current) return
+    advancingRef.current = true
+    resetMonthProgress()
+    progressMonth()
+    advancingRef.current = false
+  }, [progressMonth, resetMonthProgress])
+
   useEffect(() => {
-    if (!running || game.paused || game.phase !== 'TRAINING') return undefined
-    const timer = setTimeout(progressMonth, 10000)
-    return () => clearTimeout(timer)
-  }, [running, game.paused, game.phase, progressMonth, game.month])
+    if (!timerActive) {
+      lastTickRef.current = null
+      return undefined
+    }
+    let frameId
+    const tick = (now) => {
+      if (advancingRef.current) return
+      if (lastTickRef.current === null) lastTickRef.current = now
+      const nextElapsed = Math.min(MONTH_DURATION, elapsedRef.current + now - lastTickRef.current)
+      lastTickRef.current = now
+      elapsedRef.current = nextElapsed
+      setProgressMs(nextElapsed)
+      if (nextElapsed >= MONTH_DURATION) {
+        advanceMonth()
+        return
+      }
+      frameId = requestAnimationFrame(tick)
+    }
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
+  }, [timerActive, game.month, advanceMonth])
 
   useEffect(() => {
     if (game.phase !== 'RACING') return undefined
@@ -47,9 +86,9 @@ function App() {
     return () => clearTimeout(timer)
   }, [game.phase, game.raceStep, game.race])
 
-  const start = () => { setGame((prev) => ({ ...prev, phase: 'TRAINING', paused: false })); setRunning(true) }
+  const start = () => { resetMonthProgress(); setGame((prev) => ({ ...prev, phase: 'TRAINING', paused: false })); setRunning(true) }
   const chooseEvent = (choice) => setGame((prev) => ({ ...applyEffects(prev, choice.effects), phase: 'EVENT', eventResult: { ...choice, effectText: formatEffects(choice.effects) }, paused: true }))
-  const continueEvent = () => setGame((prev) => ({ ...prev, event: null, eventResult: null, phase: 'TRAINING', month: prev.month + 1, paused: false }))
+  const continueEvent = () => { resetMonthProgress(); setGame((prev) => ({ ...prev, event: null, eventResult: null, phase: 'TRAINING', month: prev.month + 1, paused: false })) }
   const startRace = () => setGame((prev) => ({ ...prev, phase: 'RACING', raceStep: 1, paused: true }))
   const finishRace = () => setGame((prev) => {
     const result = { month: prev.month, title: currentRace.title, finish: prev.race.finish }
@@ -59,7 +98,7 @@ function App() {
     if (prev.month === 6) return { ...next, phase: 'ENDING', paused: true }
     return { ...next, phase: 'TRAINING', month: prev.month + 1, paused: false }
   })
-  const fastForward = () => { if (game.phase === 'TRAINING') progressMonth() }
+  const fastForward = () => { if (game.phase === 'TRAINING' && !game.paused) advanceMonth() }
 
   const center = useMemo(() => {
     if (game.phase === 'START') return <div className="start"><span className="eyebrow">6 MONTH TRAINING PROTOTYPE</span><h1>메지로 맥퀸과<br />봄을 향해 달려가세요.</h1><p>자동 훈련과 선택 이벤트, 두 번의 레이스로 완성되는 짧고 밀도 있는 육성 루프입니다.</p><button className="primary" onClick={start}>육성 시작</button></div>
@@ -76,7 +115,7 @@ function App() {
       <section className="card stage"><div className="month"><span>TRAINING YEAR 1</span><strong>{months[game.month - 1] ?? '완료'}</strong></div>{center}</section>
       <aside className="card status"><span className="eyebrow">CONDITION</span><h2 className="condition">{game.condition}</h2><div className="bar-label"><span>체력</span><b>{game.stamina}/100</b></div><div className="bar"><i style={{ width: `${game.stamina}%` }} /></div><div className="record"><span>전적</span><b>{game.starts}전 {game.wins}승</b><span>팬 수</span><b>{game.fans.toLocaleString()}명</b><span>최고 순위</span><b>{game.bestRank === 99 ? '-' : `${game.bestRank}착`}</b></div><hr /><span className="eyebrow">NEXT RACE</span>{nextRace ? <><h3>{nextRace.title}</h3><p>{nextRace.distance} · {nextRace.surface} · {nextRace.entrants}명</p><p className="muted">{nextRace.month - game.month}개월 후</p></> : <p className="muted">남은 레이스 없음</p>}</aside>
     </section>
-    <section className="bottom card"><div className="logs"><span className="eyebrow">RECENT LOG</span>{game.logs.map((log, i) => <p key={i}>{log}</p>)}</div><div className="controls"><button onClick={() => setGame((prev) => ({ ...prev, paused: !prev.paused }))} disabled={!running || game.phase !== 'TRAINING'}>{game.paused ? '재개' : '일시정지'}</button><button onClick={fastForward} disabled={game.phase !== 'TRAINING'}>빠르게 진행</button><span>{timerText}</span></div></section>
+    <section className="bottom card"><div className="logs"><span className="eyebrow">RECENT LOG</span>{game.logs.map((log, i) => <p key={i}>{log}</p>)}</div><div className="month-progress"><div className="progress-copy"><span>{timerText}</span><b>{Math.round(progressPercent)}%</b></div><div className="progress-track" role="progressbar" aria-label="다음 달까지 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(progressPercent)}><i style={{ width: `${progressPercent}%` }} /></div></div><div className="controls"><button onClick={() => setGame((prev) => ({ ...prev, paused: !prev.paused }))} disabled={!running || game.phase !== 'TRAINING'}>{game.paused ? '재개' : '일시정지'}</button><button onClick={fastForward} disabled={game.phase !== 'TRAINING' || game.paused}>빠르게 진행</button></div></section>
     {game.phase === 'EVENT' && <EventModal game={game} onChoose={chooseEvent} onContinue={continueEvent} />}
   </main>
 }
