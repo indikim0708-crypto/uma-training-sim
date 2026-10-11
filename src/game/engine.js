@@ -1,7 +1,7 @@
 import { trainings } from '../data/trainings.js'
 import { gradeGrowthMultiplier, placementGrowthMultiplier } from '../data/races.js'
 
-export const CONDITIONS = ['절부진', '부진', '보통', '호조', '절호조']
+export const CONDITIONS = ['최악', '저조', '보통', '양호', '최상']
 export const months = ['1월', '2월', '3월', '4월', '5월', '6월']
 export const rng = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
 
