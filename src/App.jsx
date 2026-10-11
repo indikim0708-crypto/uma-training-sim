@@ -3,9 +3,9 @@ import { character, STAT_KEYS, STAT_LABELS } from './data/character'
 import { events } from './data/events'
 import { races } from './data/races'
 import { trainings, restTraining } from './data/trainings'
-import { applyEffects, conditionFrom, months, rating, runTraining, simulateRace } from './game/engine'
+import { applyEffects, conditionFrom, months, rating, runTraining, simulateRace, trainingFailureRate } from './game/engine'
 
-const initialGame = () => ({ month: 1, stats: { ...character.stats }, stamina: 100, condition: character.condition, fans: 0, starts: 0, wins: 0, bestRank: 99, raceResults: [], logs: ['육성 준비가 완료되었습니다.'], phase: 'START', training: null, trainingResolved: false, event: null, eventResult: null, race: null, raceStep: 0, paused: false })
+const initialGame = () => ({ month: 1, stats: { ...character.stats }, stamina: 100, condition: character.condition, fans: 0, starts: 0, wins: 0, bestRank: 99, raceResults: [], logs: ['육성 준비가 완료되었습니다.'], phase: 'START', training: null, trainingResolved: false, forceRestNext: false, event: null, eventResult: null, race: null, raceStep: 0, paused: false })
 const addLog = (game, text) => ({ ...game, logs: [text, ...game.logs].slice(0, 5) })
 const statLabel = (key) => STAT_LABELS[key] ?? key
 const formatEffects = (effects) => {
@@ -32,17 +32,22 @@ function App() {
   const timerActive = running && !game.paused && game.phase === 'TRAINING' && !game.trainingResolved
   const remainingSeconds = Math.max(0, (1 - progressRatio) * monthDuration / 1000)
   const progressPercent = Math.min(100, progressRatio * 100)
+  const failureRate = trainingFailureRate(game.stamina)
   const timerText = game.phase === 'TRAINING' ? `다음 달까지 ${remainingSeconds.toFixed(1)}초${game.paused ? ' · 일시정지' : ''}` : '월 진행 일시정지'
 
   const resolveTraining = useCallback((selectedId = null) => {
     setGame((prev) => {
       if (prev.phase !== 'TRAINING' || prev.trainingResolved) return prev
-      const training = runTraining(prev, selectedId)
-      let next = { ...prev, stamina: training.after, stats: { ...prev.stats }, training, trainingResolved: true, phase: 'TRAINING' }
+      const training = runTraining(prev, prev.forceRestNext ? 'ForcedRest' : selectedId)
+      let next = { ...prev, stamina: training.after, stats: { ...prev.stats }, training, trainingResolved: true, forceRestNext: training.forceRestNext ?? false, phase: 'TRAINING' }
       Object.entries(training.gains).forEach(([stat, amount]) => { next.stats[stat] += amount })
       if (training.conditionChange) next.condition = conditionFrom(next.condition, training.conditionChange)
       const gains = Object.entries(training.gains).map(([stat, value]) => `${statLabel(stat)} +${value}`).join(', ')
-      const trainingLog = training.id === 'Rest'
+      const trainingLog = training.forcedRest
+        ? `${prev.month}월 | 강제 휴식 : 체력 ${training.before} → ${training.after} · 다음 달부터 ${trainings.find((item) => item.id === selectedId)?.label ?? '기존'} 훈련 재개`
+        : training.failed
+          ? `${prev.month}월 | ${training.label} 훈련 실패! : ${gains} · 체력 ${training.before} → ${training.after}${training.conditionChange < 0 ? ' · 컨디션 하락' : ''}`
+        : training.id === 'Rest'
         ? `${prev.month}월 | 휴식 : 체력 ${training.before} → ${training.after}${training.conditionChange ? ' · 컨디션 상승' : ''}`
         : `${prev.month}월 | ${training.label} 훈련 : ${gains} · 체력 ${training.before} → ${training.after}`
       next = addLog(next, trainingLog)
@@ -147,7 +152,7 @@ function App() {
     <section className="dashboard">
       <aside className="card profile"><span className="eyebrow">TRAINEE</span><h2>{character.name}</h2><div className="portrait">M<span>♘</span></div><div className="tags"><span>{character.distance}</span><span>{character.style}</span></div><Stats stats={game.stats} /></aside>
       <section className="card stage"><div className="month"><span>TRAINING YEAR 1</span><strong>{months[game.month - 1] ?? '완료'}</strong></div>{center}</section>
-      <aside className="card status"><span className="eyebrow">CONDITION</span><h2 className="condition">{game.condition}</h2><div className="bar-label"><span>체력</span><b>{game.stamina}/100</b></div><div className="bar"><i style={{ width: `${game.stamina}%` }} /></div><div className="record"><span>전적</span><b>{game.starts}전 {game.wins}승</b><span>팬 수</span><b>{game.fans.toLocaleString()}명</b><span>최고 순위</span><b>{game.bestRank === 99 ? '-' : `${game.bestRank}착`}</b></div><hr /><span className="eyebrow">NEXT RACE</span>{nextRace ? <><h3>{nextRace.title}</h3><p>{nextRace.distance} · {nextRace.surface} · {nextRace.entrants}명</p><p className="muted">{nextRace.month - game.month}개월 후</p></> : <p className="muted">남은 레이스 없음</p>}</aside>
+      <aside className="card status"><span className="eyebrow">CONDITION</span><h2 className="condition">{game.condition}</h2><div className="bar-label"><span>체력</span><b>{game.stamina}/100</b></div><div className="bar"><i style={{ width: `${game.stamina}%` }} /></div><p className={`failure-risk ${failureRate > 0 ? 'danger' : ''}`}>{game.stamina === 0 ? '훈련 불가 / 다음 달 강제 휴식' : failureRate > 0 ? `훈련 실패 위험 ${failureRate}%` : '훈련 실패 위험 없음'}</p><div className="record"><span>전적</span><b>{game.starts}전 {game.wins}승</b><span>팬 수</span><b>{game.fans.toLocaleString()}명</b><span>최고 순위</span><b>{game.bestRank === 99 ? '-' : `${game.bestRank}착`}</b></div><hr /><span className="eyebrow">NEXT RACE</span>{nextRace ? <><h3>{nextRace.title}</h3><p>{nextRace.distance} · {nextRace.surface} · {nextRace.entrants}명</p><p className="muted">{nextRace.month - game.month}개월 후</p></> : <p className="muted">남은 레이스 없음</p>}</aside>
     </section>
     {game.phase === 'EVENT' && <EventModal game={game} onChoose={chooseEvent} onContinue={continueEvent} />}
   </main>
@@ -160,9 +165,9 @@ function Training({ game, selectedTraining, onSelect }) {
   const options = [restTraining, ...trainings]
   const selected = options.find((option) => option.id === selectedTraining)
   return <div className="training training-active">
-    <div className="training-heading"><span className="eyebrow">MONTHLY TRAINING</span><h1>현재 자동 훈련: {selected?.label}</h1><p>선택한 행동은 바꾸기 전까지 매월 자동으로 반복됩니다.</p></div>
+    <div className="training-heading"><span className="eyebrow">MONTHLY TRAINING</span><h1>{game.forceRestNext ? '다음 달 강제 휴식 예정' : `현재 자동 훈련: ${selected?.label}`}</h1><p>{game.forceRestNext ? '체력이 완전히 소진되었습니다. 선택한 훈련은 휴식 후 자동으로 재개됩니다.' : '선택한 행동은 바꾸기 전까지 매월 자동으로 반복됩니다.'}</p></div>
     <div className="training-options">{options.map((option) => <button key={option.id} className={selectedTraining === option.id ? 'selected' : ''} onClick={() => onSelect(option.id)} disabled={resolved}><b>{option.label}</b><small>{option.id === 'Rest' ? option.hint : `${statLabel(option.id)} 상승 · 체력 소모`}</small></button>)}</div>
-    <section className="training-log"><div className="training-log-title"><span className="eyebrow">TRAINING LOG</span><span>LIVE HISTORY</span></div>{resolved && <div className="latest-training"><b>{t.label} 훈련 완료</b><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{statLabel(stat)} +{amount}</b>)}{t.conditionChange > 0 && <b>컨디션 상승</b>}</div><small>체력 {t.before} → {t.after}</small></div>}<div className="log-feed">{game.logs.map((log, index) => <p key={`${log}-${index}`} className={index === 0 ? 'latest' : ''}>{log}</p>)}</div></section>
+    <section className="training-log"><div className="training-log-title"><span className="eyebrow">TRAINING LOG</span><span>LIVE HISTORY</span></div>{resolved && <div className={`latest-training ${t.failed ? 'failed' : ''}`}><b>{t.forcedRest ? '강제 휴식' : t.failed ? `${t.label} 훈련 실패!` : `${t.label} 훈련 완료`}</b><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{statLabel(stat)} +{amount}</b>)}{t.conditionChange > 0 && <b>컨디션 상승</b>}{t.conditionChange < 0 && <b>컨디션 하락</b>}</div><small>체력 {t.before} → {t.after}</small></div>}<div className="log-feed">{game.logs.map((log, index) => <p key={`${log}-${index}`} className={index === 0 ? 'latest' : ''}>{log}</p>)}</div></section>
   </div>
 }
 function EventModal({ game, onChoose, onContinue }) { const { event, eventResult } = game; return <div className="overlay"><div className="modal"><span className="eyebrow">RANDOM EVENT</span><h2>{event.title}</h2>{eventResult ? <><p>{eventResult.result}</p><div className="actual">{eventResult.effectText}</div><button className="primary" onClick={onContinue}>계속</button></> : <><p>{event.text}</p><div className="choices">{event.choices.map((choice) => <button key={choice.label} onClick={() => onChoose(choice)}><b>{choice.label}</b><small>{choice.hint}</small></button>)}</div></>}</div></div> }

@@ -1,4 +1,4 @@
-import { trainings } from '../data/trainings'
+import { trainings } from '../data/trainings.js'
 
 export const CONDITIONS = ['절부진', '부진', '보통', '호조', '절호조']
 export const months = ['1월', '2월', '3월', '4월', '5월', '6월']
@@ -11,17 +11,31 @@ const weighted = (items) => {
 export const getConditionIndex = (condition) => CONDITIONS.indexOf(condition)
 export const conditionFrom = (condition, delta = 0) => CONDITIONS[Math.max(0, Math.min(4, getConditionIndex(condition) + delta))]
 export const statSum = (stats) => Object.values(stats).reduce((a, b) => a + b, 0)
+export function trainingFailureRate(stamina) {
+  if (stamina <= 0) return 100
+  if (stamina <= 10) return 80
+  if (stamina <= 20) return 50
+  if (stamina <= 30) return 25
+  if (stamina <= 40) return 10
+  return 0
+}
 
 export function runTraining(game, selectedId = null) {
   const before = game.stamina
+  if (selectedId === 'ForcedRest') return { id: 'ForcedRest', label: '강제 휴식', gains: {}, before, after: Math.min(100, before + rng(25, 35)), conditionChange: 0, forcedRest: true, message: '체력이 완전히 소진되어 강제 휴식을 취했다.' }
   if (selectedId === 'Rest' || (!selectedId && before <= 25)) {
     const conditionChange = Math.random() < 0.35 ? 1 : 0
     return { id: 'Rest', label: '휴식', gains: {}, before, after: Math.min(100, before + rng(25, 35)), conditionChange, message: '휴식을 취하며 체력을 회복했다.' }
   }
   const training = selectedId ? trainings.find((item) => item.id === selectedId) : weighted(trainings)
   if (!training) return runTraining(game)
+  const failureRate = trainingFailureRate(before)
+  if (Math.random() * 100 < failureRate) {
+    const gains = Object.fromEntries(Object.keys(training.gains).map((stat) => [stat, 0]))
+    return { id: training.id, label: training.label, gains, before, after: Math.max(0, before - 5), conditionChange: Math.random() < 0.2 ? -1 : 0, failed: true, forceRestNext: before === 0, failureRate, message: `${training.label} 훈련에 실패했다.` }
+  }
   const gains = Object.fromEntries(Object.entries(training.gains).map(([stat, [min, max]]) => [stat, rng(min, max)]))
-  return { id: training.id, label: training.label, gains, before, after: Math.max(0, before - training.staminaCost), conditionChange: 0, message: `${training.label} 훈련을 진행했다.` }
+  return { id: training.id, label: training.label, gains, before, after: Math.max(0, before - training.staminaCost), conditionChange: 0, failed: false, forceRestNext: false, failureRate, message: `${training.label} 훈련을 진행했다.` }
 }
 
 export function applyEffects(game, effects) {
