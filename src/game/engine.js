@@ -133,10 +133,3 @@ export function simulateRace(game, race) {
   ] }
 }
 
-export function rating(game) {
-  const total = statSum(game.stats)
-  if (total >= 850) return ['A', '장거리의 귀공자']
-  if (total >= 760) return ['B+', '장거리의 싹']
-  if (total >= 690) return ['B', '품격 있는 도전자']
-  return ['C+', '성장하는 우마무스메']
-}
