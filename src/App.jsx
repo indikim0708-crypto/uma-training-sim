@@ -23,8 +23,8 @@ function App() {
   const [speed, setSpeed] = useState(1)
   const [selectedTraining, setSelectedTraining] = useState('Speed')
   const [progressRatio, setProgressRatio] = useState(0)
-  const elapsedRef = useRef(0)
-  const lastTickRef = useRef(null)
+  const progressRef = useRef(0)
+  const progressAnchorRef = useRef(null)
   const advancingRef = useRef(false)
   const currentRace = races.find((race) => race.month === game.month)
   const nextRace = races.find((race) => race.month >= game.month && !game.raceResults.some((result) => result.month === race.month))
@@ -51,33 +51,35 @@ function App() {
   }, [])
 
   const resetMonthProgress = useCallback(() => {
-    elapsedRef.current = 0
-    lastTickRef.current = null
+    progressRef.current = 0
+    progressAnchorRef.current = null
     setProgressRatio(0)
   }, [])
 
   const advanceMonth = useCallback(() => {
     if (advancingRef.current) return
     advancingRef.current = true
-    resetMonthProgress()
+    progressRef.current = 1
+    progressAnchorRef.current = null
+    setProgressRatio(1)
     resolveTraining(selectedTraining)
     advancingRef.current = false
-  }, [resolveTraining, resetMonthProgress, selectedTraining])
+  }, [resolveTraining, selectedTraining])
 
   useEffect(() => {
     if (!timerActive) {
-      lastTickRef.current = null
+      progressAnchorRef.current = null
       return undefined
     }
     let frameId
     const tick = (now) => {
       if (advancingRef.current) return
-      if (lastTickRef.current === null) lastTickRef.current = now
-      const nextElapsed = Math.min(1, elapsedRef.current + (now - lastTickRef.current) / monthDuration)
-      lastTickRef.current = now
-      elapsedRef.current = nextElapsed
-      setProgressRatio(nextElapsed)
-      if (nextElapsed >= 1) {
+      if (progressAnchorRef.current === null) progressAnchorRef.current = { startedAt: now, progress: progressRef.current }
+      const anchor = progressAnchorRef.current
+      const nextProgress = Math.min(1, anchor.progress + (now - anchor.startedAt) / monthDuration)
+      progressRef.current = nextProgress
+      setProgressRatio(nextProgress)
+      if (nextProgress >= 1) {
         advanceMonth()
         return
       }
@@ -118,14 +120,17 @@ function App() {
   })
   const continueEvent = () => { resetMonthProgress(); setGame((prev) => ({ ...prev, event: null, eventResult: null, phase: 'TRAINING', month: prev.month + 1, paused: false })) }
   const startRace = () => setGame((prev) => ({ ...prev, phase: 'RACING', raceStep: 1, paused: true }))
-  const finishRace = () => setGame((prev) => {
+  const finishRace = () => {
+    resetMonthProgress()
+    setGame((prev) => {
     const result = { month: prev.month, title: currentRace.title, finish: prev.race.finish }
     const wins = prev.wins + (result.finish === 1 ? 1 : 0)
     const fans = prev.fans + (result.finish === 1 ? 900 : Math.max(180, (currentRace.entrants - result.finish + 1) * 110))
     const next = addLog({ ...prev, starts: prev.starts + 1, wins, fans, bestRank: Math.min(prev.bestRank, result.finish), raceResults: [...prev.raceResults, result], race: null }, `${prev.month}월 | 레이스 ${result.title} : ${result.finish}착`)
     if (prev.month === 6) return { ...next, phase: 'ENDING', paused: true }
-    return { ...next, phase: 'TRAINING', month: prev.month + 1, paused: false }
-  })
+      return { ...next, phase: 'TRAINING', month: prev.month + 1, paused: false }
+    })
+  }
   const fastForward = () => { if (game.phase === 'TRAINING' && !game.paused && !game.trainingResolved) advanceMonth() }
 
   const center = useMemo(() => {
