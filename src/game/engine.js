@@ -1,6 +1,7 @@
 import { trainings } from '../data/trainings.js'
 import { gradeGrowthMultiplier, placementGrowthMultiplier } from '../data/races.js'
 import { phaseTrainingMultiplier, STAT_MAX } from '../data/seasons.js'
+import { leadGroupLimit, raceStrategies, wisdomChance } from '../data/raceStrategies.js'
 
 export const CONDITIONS = ['최악', '저조', '보통', '양호', '최상']
 export const months = ['1월', '2월', '3월', '4월', '5월', '6월']
@@ -70,17 +71,21 @@ export function simulateRace(game, race) {
     if (gap > 150) finish = Math.max(finish, Math.min(race.entrants, 7))
     else if (gap > 50) finish = Math.max(finish, 4)
   }
-  const smart = game.stats.Wisdom + rng(-20, 20) > 115
-  const start = Math.min(race.entrants, finish + rng(1, 2))
-  const mid = Math.min(race.entrants, Math.max(1, finish + rng(0, 2)))
+  const strategy = raceStrategies[game.raceStrategy] ?? raceStrategies.LEADER
+  const leadLimit = leadGroupLimit(strategy, race.entrants)
+  const lateStart = Math.random() < wisdomChance(strategy.lateStartChances, game.stats.Wisdom)
+  const lateStartMax = Math.max(leadLimit + 1, Math.ceil(race.entrants * .75))
+  const start = lateStart ? rng(leadLimit + 1, lateStartMax) : rng(1, leadLimit)
+  const recoverySuccess = lateStart && Math.random() < wisdomChance(strategy.recoveryChances, game.stats.Wisdom)
+  const mid = lateStart ? (recoverySuccess ? rng(1, leadLimit) : Math.max(leadLimit + 1, start - rng(0, 2))) : rng(1, leadLimit)
   const raceStamina = Math.max(15, Math.min(98, 100 - Math.round((race.distanceType === 'LONG' ? 48 : 34) - game.stats.Stamina / 18)))
   const growth = calculateRaceGrowth(race, finish)
   const fans = Math.round(race.fansBase * (race.entrants - finish + 1) / race.entrants)
   return { ...race, finish, score, entrants: race.entrants, growth, fans, logs: [
     { phase: '출전표', text: `${race.name} · ${race.grade} · ${race.distance}\n총 ${race.entrants}명의 우마무스메가 출전한다.\n맥퀸이 게이트 안에서 집중하고 있다.`, rank: null, stamina: null },
-    { phase: 'START', text: '출발 신호! 맥퀸이 힘차게 스타트를 끊었다.', rank: start, stamina: 91 },
-    { phase: '초반', text: '맥퀸은 무난하게 자리를 잡았다.\n앞쪽의 흐름을 놓치지 않고 있다.', rank: start, stamina: 78 },
-    { phase: '중반', text: staminaShortage ? '긴 레이스에서 소모한 체력이 마지막 순간 발목을 잡는다.\n스태미나 부족! 맥퀸은 호흡을 가다듬는다.' : smart ? '선두의 페이스가 빨라졌다.\n지능 판정 성공! 맥퀸은 불필요한 체력 소모를 줄였다.' : '선두의 페이스가 빨라졌다.\n맥퀸은 호흡을 가다듬으며 차분하게 따라붙는다.', rank: mid, stamina: raceStamina },
+    { phase: 'START', text: lateStart ? '출발이 조금 늦었다! 맥퀸이 예상보다 뒤쪽에서 레이스를 시작한다.' : '출발 신호! 맥퀸이 선두 바로 뒤에 자리를 잡는다.', rank: start, stamina: 91 },
+    { phase: '초반', text: lateStart ? '출발이 조금 늦었다!\n맥퀸이 예상보다 뒤쪽에서 레이스를 시작한다.' : '맥퀸은 좋은 출발을 보였다.\n선두 바로 뒤에 자리를 잡는다.', rank: start, stamina: 78 },
+    { phase: '중반', text: lateStart ? (recoverySuccess ? `맥퀸이 바깥쪽에서 서서히 순위를 올린다.\n선두 그룹 복귀 성공! ${start}위 → ${mid}위` : `앞이 막혀 좀처럼 자리를 잡지 못한다.\n맥퀸은 아직 중단에 머물러 있다. ${start}위 → ${mid}위`) : staminaShortage ? '선두 그룹에서 페이스를 유지하려 하지만 체력이 빠르게 떨어진다.\n스태미나 부족! 맥퀸은 호흡을 가다듬는다.' : '맥퀸은 선두 그룹에서 안정적으로 페이스를 유지하고 있다.', rank: mid, stamina: raceStamina },
     { phase: '최종 직선', text: `맥퀸이 스퍼트를 시작했다!\n${mid}위 → ${finish}위, 선두를 추격한다!`, rank: finish, stamina: Math.max(15, raceStamina - 28) },
     { phase: '결과', text: finish === 1 ? '맥퀸이 결승선을 가장 먼저 통과했다!' : `맥퀸이 ${finish}위로 결승선을 통과했다.`, rank: finish, stamina: 0 },
   ] }

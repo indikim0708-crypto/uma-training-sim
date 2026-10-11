@@ -4,6 +4,7 @@ export const character = {
   nameEn: 'MEJIRO McQUEEN',
   distance: '중거리 · 장거리',
   style: '선행',
+  raceStrategy: 'LEADER',
   condition: '보통',
   stats: { Speed: 120, Stamina: 145, Power: 105, Guts: 95, Wisdom: 110 },
 }
