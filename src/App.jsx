@@ -15,7 +15,7 @@ const infoFor = (turn) => { const phase = phases[Math.floor(turn / 24)] ?? phase
 const raceTurn = (race) => phases.findIndex((p) => p.id === race.phase) * 24 + (race.month - 1) * 2 + (race.half === 'LATE' ? 1 : 0)
 const initialGame = () => ({ turn: 6, stats: { ...character.stats }, stamina: 100, condition: character.condition, fans: 0, starts: 0, wins: 0, bestRank: 99, raceResults: [], skippedRaceIds: [], usedEventIds: [], logs: ['주니어급 4월 전반, 3년 육성이 시작되었습니다.'], phase: 'START', training: null, trainingResolved: false, forceRestNext: false, optionalDecisionTurn: null, event: null, eventResult: null, eventTimerKey: 0, campStartShown: [], campEndPending: false, race: null, raceStep: 0, paused: false, restStreak: 0, restConfirmation: false, lastNonRestTraining: 'Speed' })
 const addLog = (game, text) => ({ ...game, logs: [text, ...game.logs].slice(0, 6) })
-const effectsText = (effects) => Object.entries(effects.stats ?? {}).map(([key, value]) => `${statLabel(key)} +${value}`).concat(effects.stamina ? [`체력 ${effects.stamina > 0 ? '+' : ''}${effects.stamina}`] : [], effects.condition ? [`컨디션 ${effects.condition > 0 ? '상승' : '하락'}`] : []).join(', ')
+const effectsText = (effects) => Object.entries(effects.stats ?? {}).map(([key, value]) => `${statLabel(key)} ${value > 0 ? '+' : ''}${value}`).concat(effects.stamina ? [`체력 ${effects.stamina > 0 ? '+' : ''}${effects.stamina}`] : [], effects.condition ? [`컨디션 ${effects.condition > 0 ? '상승' : '하락'}`] : []).join(', ')
 const campNotice = (kind) => kind === 'start' ? { notice: 'camp-start', title: '☀ 여름 합숙 시작!', result: '여름 합숙이 시작되었습니다.\n7월 전반부터 8월 후반까지 훈련 능력치 상승량이 +35% 적용됩니다.' } : { notice: 'camp-end', title: '☀ 여름 합숙 종료', result: '여름 합숙 일정이 모두 끝났습니다.\n9월 전반부터는 훈련 효과가 정상 수준으로 돌아갑니다.' }
 
 function App() {

@@ -74,6 +74,42 @@ export const events = [
     ]},
     { label: '쉬어야 한다', hint: '체력을 아껴야 한다', effects: { stamina: 15 }, result: '다음 훈련을 위해 체력을 아끼기로 했다.' },
   ]},
+  { id: 'ramonu-tiara-lecture', title: '라모누의 티아라 강좌', text: '라모누가 메지로들을 모아 특강을 진행한다.', once: true, choices: [
+    { label: '듣게 한다', hint: '특강에서 새로운 감각을 얻을 수 있다', outcomes: [
+      { weight: 60, effects: { stats: { Speed: 20 } }, result: '라모누의 조언을 흡수하며 한층 빠른 발걸음을 얻었다.' },
+      { weight: 20, effects: { stats: { Speed: 15 } }, result: '티아라의 품격이 담긴 강의에서 유익한 감각을 배웠다.' },
+      { weight: 20, effects: { stats: { Speed: 10 } }, result: '낯선 내용이었지만 레이스를 보는 시야가 조금 넓어졌다.' },
+    ]},
+    { label: '열심히 듣게 한다', hint: '집중하면 더 큰 성과를 얻을 수도 있다', outcomes: [
+      { weight: 40, effects: { stats: { Speed: 10 } }, result: '차분히 집중하며 기초적인 달리기 감각을 다졌다.' },
+      { weight: 40, effects: { stats: { Speed: 20 } }, result: '강의의 핵심을 짚어 내며 뛰어난 속도 감각을 얻었다.' },
+      { weight: 20, effects: { stats: { Speed: 30 } }, result: '라모누의 말이 깊게 와닿아 레이스 감각이 크게 개화했다.' },
+    ]},
+  ]},
+  { id: 'eating-contest', title: '폭식대회?', text: '오구리 캡이 무한리필 뷔페를 같이 가자고 한다.', once: true, choices: [
+    { label: '먹고 오라고 한다', hint: '체력 회복 / 스피드 소폭 감소 가능', outcomes: [
+      { weight: 40, effects: { stamina: 40, stats: { Speed: -3 } }, result: '든든하게 식사를 마쳤다. 몸은 조금 무거워졌지만 기운은 넘친다.' },
+      { weight: 60, effects: { stamina: 30, stats: { Speed: -2 } }, result: '즐거운 식사 덕분에 배는 든든해졌지만, 가볍게 몸을 풀 필요가 생겼다.' },
+    ]},
+    { label: '폭식은 금지!!!', hint: '안전하게 체력을 회복한다', effects: { stamina: 10 }, result: '적당한 식사로 마무리하고 차분히 체력을 회복했다.' },
+  ]},
+  { id: 'kidnapping-play', title: '납치 놀이?', text: '맥퀸이 골드쉽에게 납치당했다고 전화가 왔다.', once: true, choices: [
+    { label: '재밌게 놀다 와', hint: '뜻밖의 경험 / 체력 소모 가능', outcomes: [
+      { weight: 40, effects: { stats: { Speed: 20 } }, result: '예상보다 즐거운 하루였다. 맥퀸은 한층 경쾌해진 발걸음으로 돌아왔다.' },
+      { weight: 60, effects: { stamina: -10, stats: { Speed: 10 } }, result: '골드쉽의 페이스에 휘말렸지만, 좋은 자극을 받고 돌아왔다.' },
+    ]},
+    { label: '구하러 간다', hint: '안전하게 체력을 회복한다', effects: { stamina: 10 }, result: '맥퀸을 무사히 데려오고, 함께 잠시 휴식을 취했다.' },
+  ]},
+  { id: 'stretching', title: '스트레칭', text: '맥퀸이 테이오의 유연성에 관심이 있어 한다.', once: true, choices: [
+    { label: '스트레칭을 가르친다', hint: '근력과 지구력이 향상될 수 있다', outcomes: [
+      { weight: 40, effects: { stats: { Power: 20 } }, result: '몸의 가동 범위가 넓어지며 강한 추진력을 얻었다.' },
+      { weight: 60, effects: { stats: { Power: 10, Stamina: 10 } }, result: '유연성을 익히며 힘과 지구력을 균형 있게 다졌다.' },
+    ]},
+    { label: '속도가 더 중요하다', hint: '스피드 향상 가능', outcomes: [
+      { weight: 40, effects: { stats: { Speed: 20 } }, result: '보다 빠른 움직임에 집중하며 확실한 속도 감각을 얻었다.' },
+      { weight: 60, effects: { stats: { Speed: 10 } }, result: '기본 동작을 다듬으며 달리기 리듬을 개선했다.' },
+    ]},
+  ]},
 ]
 
 export const eligibleEvents = (phaseId, usedEventIds = []) => events.filter((event) => (!event.phases || event.phases.includes(phaseId)) && (!event.once || !usedEventIds.includes(event.id)))
