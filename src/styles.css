@@ -13,3 +13,5 @@
 .sticky-progress{position:sticky;top:12px;z-index:20;display:grid;grid-template-columns:minmax(260px,1fr) auto;align-items:center;gap:22px;margin-bottom:16px;padding:13px 18px;background:rgba(35,32,43,.97);backdrop-filter:blur(12px)}.sticky-progress .month-progress{max-width:540px}.sticky-progress .speed-controls{margin-top:7px}@media(max-width:850px){.sticky-progress{grid-template-columns:1fr;gap:9px;top:6px;padding:12px}.sticky-progress .month-progress{max-width:none}.sticky-progress .controls{justify-content:flex-start}}
 
 .failure-risk{margin:0 0 18px!important;padding:7px 9px;border-radius:5px;background:#26232d;color:#9d96a9;font-size:11px!important}.failure-risk.danger{background:#402d38;color:#efadba;border-left:2px solid #cf6d81}.latest-training.failed{border-left-color:#d16072;background:linear-gradient(90deg,#412b36,#292530)}.latest-training.failed>b{color:#ef9eac}
+
+.progress-track i{width:100%!important;transform-origin:left center;background:#9a78cc!important;box-shadow:none!important;transition:none!important}

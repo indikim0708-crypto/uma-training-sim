@@ -23,10 +23,10 @@ export function trainingFailureRate(stamina) {
 
 export function runTraining(game, selectedId = null) {
   const before = game.stamina
-  if (selectedId === 'ForcedRest') return { id: 'ForcedRest', label: '강제 휴식', gains: {}, before, after: Math.min(100, before + rng(25, 35)), conditionChange: 0, forcedRest: true, message: '체력이 완전히 소진되어 강제 휴식을 취했다.' }
+  if (selectedId === 'ForcedRest') return { id: 'ForcedRest', label: '강제 휴식', gains: {}, before, after: Math.min(100, before + rng(30, 80)), conditionChange: 0, forcedRest: true, message: '체력이 완전히 소진되어 강제 휴식을 취했다.' }
   if (selectedId === 'Rest' || (!selectedId && before <= 25)) {
     const conditionChange = Math.random() < 0.35 ? 1 : 0
-    return { id: 'Rest', label: '휴식', gains: {}, before, after: Math.min(100, before + rng(25, 35)), conditionChange, message: '휴식을 취하며 체력을 회복했다.' }
+    return { id: 'Rest', label: '휴식', gains: {}, before, after: Math.min(100, before + rng(30, 80)), conditionChange, message: '휴식을 취하며 체력을 회복했다.' }
   }
   const training = selectedId ? trainings.find((item) => item.id === selectedId) : weighted(trainings)
   if (!training) return runTraining(game)
