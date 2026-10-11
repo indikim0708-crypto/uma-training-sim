@@ -8,7 +8,13 @@ import { applyEffects, conditionFrom, months, rating, runTraining, simulateRace 
 const initialGame = () => ({ month: 1, stats: { ...character.stats }, stamina: 100, condition: character.condition, fans: 0, starts: 0, wins: 0, bestRank: 99, raceResults: [], logs: ['육성 준비가 완료되었습니다.'], phase: 'START', training: null, trainingResolved: false, event: null, eventResult: null, race: null, raceStep: 0, paused: false })
 const addLog = (game, text) => ({ ...game, logs: [text, ...game.logs].slice(0, 5) })
 const statLabel = (key) => STAT_LABELS[key] ?? key
-const formatEffects = (effects) => Object.entries(effects.stats ?? {}).map(([key, value]) => `${statLabel(key)} +${value}`).join(' · ') || '특별한 변화 없음'
+const formatEffects = (effects) => {
+  const changes = Object.entries(effects.stats ?? {}).map(([key, value]) => `${statLabel(key)} +${value}`)
+  if (effects.stamina) changes.push(`체력 ${effects.stamina > 0 ? '+' : ''}${effects.stamina}`)
+  if (effects.condition) changes.push(`컨디션 ${effects.condition > 0 ? '상승' : '하락'}`)
+  if (effects.fans) changes.push(`팬 +${effects.fans}`)
+  return changes.join(', ') || '특별한 변화 없음'
+}
 const MONTH_DURATION = { 1: 10000, 2: 5000 }
 
 function App() {
@@ -35,7 +41,11 @@ function App() {
       let next = { ...prev, stamina: training.after, stats: { ...prev.stats }, training, trainingResolved: true, phase: 'TRAINING' }
       Object.entries(training.gains).forEach(([stat, amount]) => { next.stats[stat] += amount })
       if (training.conditionChange) next.condition = conditionFrom(next.condition, training.conditionChange)
-      next = addLog(next, `${prev.month}월: ${training.label} ${Object.entries(training.gains).map(([s, v]) => `${statLabel(s)} +${v}`).join(' ') || '체력 회복'}`)
+      const gains = Object.entries(training.gains).map(([stat, value]) => `${statLabel(stat)} +${value}`).join(', ')
+      const trainingLog = training.id === 'Rest'
+        ? `${prev.month}월 | 휴식 : 체력 ${training.before} → ${training.after}${training.conditionChange ? ' · 컨디션 상승' : ''}`
+        : `${prev.month}월 | ${training.label} 훈련 : ${gains} · 체력 ${training.before} → ${training.after}`
+      next = addLog(next, trainingLog)
       return next
     })
   }, [])
@@ -102,14 +112,17 @@ function App() {
   }, [game.phase, game.raceStep, game.race])
 
   const start = () => { resetMonthProgress(); setGame((prev) => ({ ...prev, phase: 'TRAINING', paused: false })); setRunning(true) }
-  const chooseEvent = (choice) => setGame((prev) => ({ ...applyEffects(prev, choice.effects), phase: 'EVENT', eventResult: { ...choice, effectText: formatEffects(choice.effects) }, paused: true }))
+  const chooseEvent = (choice) => setGame((prev) => {
+    const next = addLog(applyEffects(prev, choice.effects), `${prev.month}월 | 이벤트 「${prev.event.title}」: ${choice.label} · ${formatEffects(choice.effects)}`)
+    return { ...next, phase: 'EVENT', eventResult: { ...choice, effectText: formatEffects(choice.effects) }, paused: true }
+  })
   const continueEvent = () => { resetMonthProgress(); setGame((prev) => ({ ...prev, event: null, eventResult: null, phase: 'TRAINING', month: prev.month + 1, paused: false })) }
   const startRace = () => setGame((prev) => ({ ...prev, phase: 'RACING', raceStep: 1, paused: true }))
   const finishRace = () => setGame((prev) => {
     const result = { month: prev.month, title: currentRace.title, finish: prev.race.finish }
     const wins = prev.wins + (result.finish === 1 ? 1 : 0)
     const fans = prev.fans + (result.finish === 1 ? 900 : Math.max(180, (currentRace.entrants - result.finish + 1) * 110))
-    const next = addLog({ ...prev, starts: prev.starts + 1, wins, fans, bestRank: Math.min(prev.bestRank, result.finish), raceResults: [...prev.raceResults, result], race: null }, `${result.title}: ${result.finish}착`)
+    const next = addLog({ ...prev, starts: prev.starts + 1, wins, fans, bestRank: Math.min(prev.bestRank, result.finish), raceResults: [...prev.raceResults, result], race: null }, `${prev.month}월 | 레이스 ${result.title} : ${result.finish}착`)
     if (prev.month === 6) return { ...next, phase: 'ENDING', paused: true }
     return { ...next, phase: 'TRAINING', month: prev.month + 1, paused: false }
   })
@@ -144,7 +157,7 @@ function Training({ game, selectedTraining, onSelect }) {
   return <div className="training training-active">
     <div className="training-heading"><span className="eyebrow">MONTHLY TRAINING</span><h1>현재 자동 훈련: {selected?.label}</h1><p>선택한 행동은 바꾸기 전까지 매월 자동으로 반복됩니다.</p></div>
     <div className="training-options">{options.map((option) => <button key={option.id} className={selectedTraining === option.id ? 'selected' : ''} onClick={() => onSelect(option.id)} disabled={resolved}><b>{option.label}</b><small>{option.id === 'Rest' ? option.hint : `${statLabel(option.id)} 상승 · 체력 소모`}</small></button>)}</div>
-    <section className="training-log"><div className="training-log-title"><span className="eyebrow">TRAINING LOG</span><span>{months[game.month - 1]}</span></div>{resolved && <div className="latest-training"><b>{t.label} 훈련 완료</b><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{statLabel(stat)} +{amount}</b>)}{t.conditionChange > 0 && <b>컨디션 상승</b>}</div><small>체력 {t.before} → {t.after}</small></div>}<div className="log-feed">{game.logs.map((log, index) => <p key={`${log}-${index}`} className={index === 0 ? 'latest' : ''}>{log}</p>)}</div></section>
+    <section className="training-log"><div className="training-log-title"><span className="eyebrow">TRAINING LOG</span><span>LIVE HISTORY</span></div>{resolved && <div className="latest-training"><b>{t.label} 훈련 완료</b><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{statLabel(stat)} +{amount}</b>)}{t.conditionChange > 0 && <b>컨디션 상승</b>}</div><small>체력 {t.before} → {t.after}</small></div>}<div className="log-feed">{game.logs.map((log, index) => <p key={`${log}-${index}`} className={index === 0 ? 'latest' : ''}>{log}</p>)}</div></section>
   </div>
 }
 function EventModal({ game, onChoose, onContinue }) { const { event, eventResult } = game; return <div className="overlay"><div className="modal"><span className="eyebrow">RANDOM EVENT</span><h2>{event.title}</h2>{eventResult ? <><p>{eventResult.result}</p><div className="actual">{eventResult.effectText}</div><button className="primary" onClick={onContinue}>계속</button></> : <><p>{event.text}</p><div className="choices">{event.choices.map((choice) => <button key={choice.label} onClick={() => onChoose(choice)}><b>{choice.label}</b><small>{choice.hint}</small></button>)}</div></>}</div></div> }
