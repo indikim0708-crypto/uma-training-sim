@@ -12,12 +12,16 @@ export const getConditionIndex = (condition) => CONDITIONS.indexOf(condition)
 export const conditionFrom = (condition, delta = 0) => CONDITIONS[Math.max(0, Math.min(4, getConditionIndex(condition) + delta))]
 export const statSum = (stats) => Object.values(stats).reduce((a, b) => a + b, 0)
 
-export function runTraining(game) {
+export function runTraining(game, selectedId = null) {
   const before = game.stamina
-  if (before <= 25) return { label: '휴식', gains: {}, before, after: Math.min(100, before + rng(26, 36)), message: '체력이 낮아 휴식을 취했다.' }
-  const training = weighted(trainings)
+  if (selectedId === 'Rest' || (!selectedId && before <= 25)) {
+    const conditionChange = Math.random() < 0.35 ? 1 : 0
+    return { id: 'Rest', label: '휴식', gains: {}, before, after: Math.min(100, before + rng(25, 35)), conditionChange, message: '휴식을 취하며 체력을 회복했다.' }
+  }
+  const training = selectedId ? trainings.find((item) => item.id === selectedId) : weighted(trainings)
+  if (!training) return runTraining(game)
   const gains = Object.fromEntries(Object.entries(training.gains).map(([stat, [min, max]]) => [stat, rng(min, max)]))
-  return { label: training.label, gains, before, after: Math.max(0, before - training.staminaCost), message: `${training.label} 훈련을 진행했다.` }
+  return { id: training.id, label: training.label, gains, before, after: Math.max(0, before - training.staminaCost), conditionChange: 0, message: `${training.label} 훈련을 진행했다.` }
 }
 
 export function applyEffects(game, effects) {
