@@ -15,6 +15,7 @@ function App() {
   const [game, setGame] = useState(initialGame)
   const [running, setRunning] = useState(false)
   const [speed, setSpeed] = useState(1)
+  const [selectedTraining, setSelectedTraining] = useState('Speed')
   const [progressRatio, setProgressRatio] = useState(0)
   const elapsedRef = useRef(0)
   const lastTickRef = useRef(null)
@@ -49,9 +50,9 @@ function App() {
     if (advancingRef.current) return
     advancingRef.current = true
     resetMonthProgress()
-    resolveTraining()
+    resolveTraining(selectedTraining)
     advancingRef.current = false
-  }, [resolveTraining, resetMonthProgress])
+  }, [resolveTraining, resetMonthProgress, selectedTraining])
 
   useEffect(() => {
     if (!timerActive) {
@@ -116,11 +117,11 @@ function App() {
 
   const center = useMemo(() => {
     if (game.phase === 'START') return <div className="start"><span className="eyebrow">6 MONTH TRAINING PROTOTYPE</span><h1>메지로 맥퀸과<br />봄을 향해 달려가세요.</h1><p>자동 훈련과 선택 이벤트, 두 번의 레이스로 완성되는 짧고 밀도 있는 육성 루프입니다.</p><button className="primary" onClick={start}>육성 시작</button></div>
-    if (game.phase === 'ENDING') return <Ending game={game} onRestart={() => { setGame(initialGame()); setRunning(false) }} />
+    if (game.phase === 'ENDING') return <Ending game={game} onRestart={() => { setGame(initialGame()); setSelectedTraining('Speed'); setRunning(false) }} />
     if (game.phase === 'RACE_INTRO') return <RaceIntro race={currentRace} onStart={startRace} />
     if (game.phase === 'RACING' || game.phase === 'RACE_RESULT') return <RaceLog game={game} onContinue={finishRace} />
-    return <Training game={game} onSelect={resolveTraining} />
-  }, [game, currentRace])
+    return <Training game={game} selectedTraining={selectedTraining} onSelect={setSelectedTraining} />
+  }, [game, currentRace, selectedTraining])
 
   return <main className="app-shell">
     <header><div className="brand"><span>UMA</span> TRAINING SIM</div><div className="phase">{game.phase.replace('_', ' ')}</div></header>
@@ -135,7 +136,7 @@ function App() {
 }
 
 function Stats({ stats, initial = false }) { return <div className="stats">{STAT_KEYS.map((key) => <div key={key}><span>{statLabel(key)}</span><b>{stats[key]}</b>{initial && <em>(+{stats[key] - character.stats[key]})</em>}</div>)}</div> }
-function Training({ game, onSelect }) { const t = game.training; const resolved = game.trainingResolved; const options = [...trainings, restTraining]; return <div className="training"><span className="eyebrow">MONTHLY TRAINING</span><h1>{resolved ? `${t.label}을(를) 진행했다.` : '이번 달의 훈련을 선택하세요.'}</h1>{resolved ? <><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{statLabel(stat)} +{amount}</b>)}{t.conditionChange > 0 && <b>컨디션 상승</b>}</div><p className="stamina-change">체력 {t.before} → {t.after}</p><div className="ambient">결과를 정리하고 다음 일정으로 넘어갑니다.</div></> : <><p>시간 안에 고르지 않으면 트레이너가 자동으로 훈련을 정합니다.</p><div className="training-options">{options.map((option) => <button key={option.id} onClick={() => onSelect(option.id)}><b>{option.label}</b><small>{option.id === 'Rest' ? option.hint : `${statLabel(option.id)} 상승 · 체력 소모`}</small></button>)}</div></>}</div> }
+function Training({ game, selectedTraining, onSelect }) { const t = game.training; const resolved = game.trainingResolved; const options = [...trainings, restTraining]; return <div className="training"><span className="eyebrow">MONTHLY TRAINING</span><h1>{resolved ? `${t.label}을(를) 진행했다.` : `${options.find((option) => option.id === selectedTraining)?.label} 훈련을 진행합니다.`}</h1>{resolved ? <><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{statLabel(stat)} +{amount}</b>)}{t.conditionChange > 0 && <b>컨디션 상승</b>}</div><p className="stamina-change">체력 {t.before} → {t.after}</p><div className="ambient">결과를 정리하고 다음 일정으로 넘어갑니다.</div></> : <><p>선택한 행동은 바꾸기 전까지 매월 자동으로 반복됩니다.</p><div className="training-options">{options.map((option) => <button key={option.id} className={selectedTraining === option.id ? 'selected' : ''} onClick={() => onSelect(option.id)}><b>{option.label}</b><small>{option.id === 'Rest' ? option.hint : `${statLabel(option.id)} 상승 · 체력 소모`}</small></button>)}</div></>}</div> }
 function EventModal({ game, onChoose, onContinue }) { const { event, eventResult } = game; return <div className="overlay"><div className="modal"><span className="eyebrow">RANDOM EVENT</span><h2>{event.title}</h2>{eventResult ? <><p>{eventResult.result}</p><div className="actual">{eventResult.effectText}</div><button className="primary" onClick={onContinue}>계속</button></> : <><p>{event.text}</p><div className="choices">{event.choices.map((choice) => <button key={choice.label} onClick={() => onChoose(choice)}><b>{choice.label}</b><small>{choice.hint}</small></button>)}</div></>}</div></div> }
 function RaceIntro({ race, onStart }) { return <div className="race-intro"><span className="eyebrow">RACE DAY</span><h1>{race.title}</h1><div className="race-info"><b>{race.distance}</b><b>{race.surface}</b><b>{race.entrants}명 출전</b></div><p>관중의 환호 속에서, 맥퀸이 출전표에 이름을 올렸다.</p><button className="primary" onClick={onStart}>START</button></div> }
 function RaceLog({ game, onContinue }) { const log = game.race.logs[game.raceStep]; const result = game.phase === 'RACE_RESULT'; return <div className="race-log"><span className="eyebrow">RACE LIVE</span><h2>[ {log.phase} ]</h2><p>{log.text}</p>{log.rank && <div className="rank">현재 순위 <b>{log.rank}위 / {game.race.entrants}</b>{log.stamina && <small>레이스 체력 {log.stamina}%</small>}</div>}{result && <button className="primary" onClick={onContinue}>{game.month === 6 ? '결과 보기' : '육성 계속'}</button>}</div> }
