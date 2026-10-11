@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { character, STAT_KEYS } from './data/character'
+import { character, STAT_KEYS, STAT_LABELS } from './data/character'
 import { events } from './data/events'
 import { races } from './data/races'
 import { applyEffects, conditionFrom, months, rating, runTraining, simulateRace } from './game/engine'
 
 const initialGame = () => ({ month: 1, stats: { ...character.stats }, stamina: 100, condition: character.condition, fans: 0, starts: 0, wins: 0, bestRank: 99, raceResults: [], logs: ['육성 준비가 완료되었습니다.'], phase: 'START', training: null, event: null, eventResult: null, race: null, raceStep: 0, paused: false })
 const addLog = (game, text) => ({ ...game, logs: [text, ...game.logs].slice(0, 5) })
-const formatEffects = (effects) => Object.entries(effects.stats ?? {}).map(([key, value]) => `${key.toUpperCase()} +${value}`).join(' · ') || '특별한 변화 없음'
+const statLabel = (key) => STAT_LABELS[key] ?? key
+const formatEffects = (effects) => Object.entries(effects.stats ?? {}).map(([key, value]) => `${statLabel(key)} +${value}`).join(' · ') || '특별한 변화 없음'
 const MONTH_DURATION = 10000
 
 function App() {
@@ -29,7 +30,7 @@ function App() {
       const training = runTraining(prev)
       let next = { ...prev, stamina: training.after, stats: { ...prev.stats }, training, phase: 'TRAINING' }
       Object.entries(training.gains).forEach(([stat, amount]) => { next.stats[stat] += amount })
-      next = addLog(next, `${prev.month}월: ${training.label} ${Object.entries(training.gains).map(([s, v]) => `${s} +${v}`).join(' ') || '체력 회복'}`)
+      next = addLog(next, `${prev.month}월: ${training.label} ${Object.entries(training.gains).map(([s, v]) => `${statLabel(s)} +${v}`).join(' ') || '체력 회복'}`)
       if (currentRace) {
         const race = simulateRace(next, currentRace)
         return { ...next, phase: 'RACE_INTRO', race, raceStep: 0, paused: true }
@@ -120,8 +121,8 @@ function App() {
   </main>
 }
 
-function Stats({ stats, initial = false }) { return <div className="stats">{STAT_KEYS.map((key) => <div key={key}><span>{key}</span><b>{stats[key]}</b>{initial && <em>(+{stats[key] - character.stats[key]})</em>}</div>)}</div> }
-function Training({ game }) { const t = game.training; return <div className="training"><span className="eyebrow">AUTO TRAINING</span><h1>{t ? `${t.label} 훈련을 진행했다.` : '첫 훈련을 준비하고 있습니다.'}</h1>{t ? <><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{stat.toUpperCase()} +{amount}</b>)}</div><p className="stamina-change">체력 {t.before} → {t.after}</p></> : <p>10초 후 자동으로 첫 훈련이 시작됩니다.</p>}<div className="ambient">훈련 리듬을 지키며, 다음 무대를 준비합니다.</div></div> }
+function Stats({ stats, initial = false }) { return <div className="stats">{STAT_KEYS.map((key) => <div key={key}><span>{statLabel(key)}</span><b>{stats[key]}</b>{initial && <em>(+{stats[key] - character.stats[key]})</em>}</div>)}</div> }
+function Training({ game }) { const t = game.training; return <div className="training"><span className="eyebrow">AUTO TRAINING</span><h1>{t ? `${t.label} 훈련을 진행했다.` : '첫 훈련을 준비하고 있습니다.'}</h1>{t ? <><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{statLabel(stat)} +{amount}</b>)}</div><p className="stamina-change">체력 {t.before} → {t.after}</p></> : <p>10초 후 자동으로 첫 훈련이 시작됩니다.</p>}<div className="ambient">훈련 리듬을 지키며, 다음 무대를 준비합니다.</div></div> }
 function EventModal({ game, onChoose, onContinue }) { const { event, eventResult } = game; return <div className="overlay"><div className="modal"><span className="eyebrow">RANDOM EVENT</span><h2>{event.title}</h2>{eventResult ? <><p>{eventResult.result}</p><div className="actual">{eventResult.effectText}</div><button className="primary" onClick={onContinue}>계속</button></> : <><p>{event.text}</p><div className="choices">{event.choices.map((choice) => <button key={choice.label} onClick={() => onChoose(choice)}><b>{choice.label}</b><small>{choice.hint}</small></button>)}</div></>}</div></div> }
 function RaceIntro({ race, onStart }) { return <div className="race-intro"><span className="eyebrow">RACE DAY</span><h1>{race.title}</h1><div className="race-info"><b>{race.distance}</b><b>{race.surface}</b><b>{race.entrants}명 출전</b></div><p>관중의 환호 속에서, 맥퀸이 출전표에 이름을 올렸다.</p><button className="primary" onClick={onStart}>START</button></div> }
 function RaceLog({ game, onContinue }) { const log = game.race.logs[game.raceStep]; const result = game.phase === 'RACE_RESULT'; return <div className="race-log"><span className="eyebrow">RACE LIVE</span><h2>[ {log.phase} ]</h2><p>{log.text}</p>{log.rank && <div className="rank">현재 순위 <b>{log.rank}위 / {game.race.entrants}</b>{log.stamina && <small>레이스 체력 {log.stamina}%</small>}</div>}{result && <button className="primary" onClick={onContinue}>{game.month === 6 ? '결과 보기' : '육성 계속'}</button>}</div> }

@@ -9,3 +9,10 @@ export const character = {
 }
 
 export const STAT_KEYS = ['Speed', 'Stamina', 'Power', 'Guts', 'Wisdom']
+export const STAT_LABELS = {
+  Speed: '스피드',
+  Stamina: '스태미나',
+  Power: '파워',
+  Guts: '근성',
+  Wisdom: '지능',
+}
