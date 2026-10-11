@@ -67,6 +67,13 @@ export const events = [
     ]},
     { label: '불필요하다', hint: '쉬는 게 좋다', effects: { stamina: 10 }, result: '무리하지 않고 휴식을 선택해 체력을 회복했다.' },
   ]},
+  { id: 'stamina-battle', title: '스태미나 배틀', text: '나세씨가 슈퍼 크릭과 맥퀸의 병주를 요청했다.', once: true, choices: [
+    { label: '허락한다', hint: '좋은 장거리 배틀이다', outcomes: [
+      { weight: 50, effects: { stamina: -10, stats: { Stamina: 35 } }, result: '슈퍼 크릭과의 치열한 병주를 끝까지 버텨내며 놀라운 지구력을 얻었다.' },
+      { weight: 50, effects: { stamina: -10, stats: { Stamina: 20 } }, result: '힘겨운 병주였지만, 장거리를 위한 단단한 기초를 쌓았다.' },
+    ]},
+    { label: '쉬어야 한다', hint: '체력을 아껴야 한다', effects: { stamina: 15 }, result: '다음 훈련을 위해 체력을 아끼기로 했다.' },
+  ]},
 ]
 
-export const eligibleEvents = (phaseId) => events.filter((event) => !event.phases || event.phases.includes(phaseId))
+export const eligibleEvents = (phaseId, usedEventIds = []) => events.filter((event) => (!event.phases || event.phases.includes(phaseId)) && (!event.once || !usedEventIds.includes(event.id)))
