@@ -6,4 +6,6 @@ export const trainings = [
   { id: 'Wisdom', label: '지능', weight: 15, staminaCost: -10, gains: { Wisdom: [16, 24], Speed: [2, 5] } },
 ]
 
+export const FRIENDSHIP_TRAINING_CHANCE = 0.5
+export const FRIENDSHIP_TRAINING_MULTIPLIER = 2
 export const restTraining = { id: 'Rest', label: '휴식', hint: '체력 회복 · 컨디션 상승 가능' }

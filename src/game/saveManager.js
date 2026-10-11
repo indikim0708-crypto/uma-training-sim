@@ -31,7 +31,9 @@ export function loadGame() {
       window.localStorage.removeItem(SAVE_KEY)
       return { status: 'invalid' }
     }
-    return { status: 'valid', save }
+    const friendshipTrainingType = typeof save.game.friendshipTrainingType === 'string' ? save.game.friendshipTrainingType : null
+    const friendshipTrainingRolled = typeof save.game.friendshipTrainingRolled === 'boolean' ? save.game.friendshipTrainingRolled : false
+    return { status: 'valid', save: { ...save, game: { ...save.game, friendshipTrainingType, friendshipTrainingRolled } } }
   } catch {
     try { window.localStorage.removeItem(SAVE_KEY) } catch { /* Storage can be unavailable. */ }
     return { status: 'invalid' }

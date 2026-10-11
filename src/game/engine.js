@@ -1,4 +1,4 @@
-import { trainings } from '../data/trainings.js'
+import { FRIENDSHIP_TRAINING_CHANCE, FRIENDSHIP_TRAINING_MULTIPLIER, trainings } from '../data/trainings.js'
 import { gradeGrowthMultiplier, placementGrowthMultiplier } from '../data/races.js'
 import { phaseTrainingMultiplier, STAT_MAX } from '../data/seasons.js'
 import { leadGroupLimit, raceStrategies, wisdomChance } from '../data/raceStrategies.js'
@@ -47,12 +47,19 @@ export function runTraining(game, selectedId = null, context = {}) {
   const failureRate = trainingFailureRate(before)
   if (Math.random() * 100 < failureRate) {
     const gains = Object.fromEntries(Object.keys(training.gains).map((stat) => [stat, 0]))
-    return { id: training.id, label: training.label, gains, before, after: Math.max(0, before - 5), conditionChange: Math.random() < 0.2 ? -1 : 0, failed: true, forceRestNext: before === 0, failureRate, message: `${training.label} 훈련에 실패했다.` }
+    return { id: training.id, label: training.label, gains, before, after: Math.max(0, before - 5), conditionChange: Math.random() < 0.2 ? -1 : 0, failed: true, forceRestNext: before === 0, failureRate, friendshipTraining: context.friendshipTraining === training.id, message: `${training.label} 훈련에 실패했다.` }
   }
   const phaseMultiplier = phaseTrainingMultiplier[context.phaseId] ?? 1
   const campMultiplier = context.summerCamp ? 1.35 : 1
-  const gains = Object.fromEntries(Object.entries(training.gains).map(([stat, [min, max]]) => [stat, Math.round(rng(min, max) * phaseMultiplier * campMultiplier)]))
-  return { id: training.id, label: training.label, gains, before, after: Math.max(0, before - training.staminaCost), conditionChange: 0, failed: false, forceRestNext: false, failureRate, summerCamp: Boolean(context.summerCamp), phaseMultiplier, message: `${training.label} 훈련을 진행했다.` }
+  const friendshipTraining = context.friendshipTraining === training.id
+  const friendshipMultiplier = friendshipTraining ? FRIENDSHIP_TRAINING_MULTIPLIER : 1
+  const gains = Object.fromEntries(Object.entries(training.gains).map(([stat, [min, max]]) => [stat, Math.round(rng(min, max) * phaseMultiplier * campMultiplier * friendshipMultiplier)]))
+  return { id: training.id, label: training.label, gains, before, after: Math.max(0, Math.min(100, before - training.staminaCost)), conditionChange: 0, failed: false, forceRestNext: false, failureRate, summerCamp: Boolean(context.summerCamp), friendshipTraining, phaseMultiplier, message: `${training.label} 훈련을 진행했다.` }
+}
+
+export function rollFriendshipTraining() {
+  if (Math.random() >= FRIENDSHIP_TRAINING_CHANCE) return null
+  return trainings[Math.floor(Math.random() * trainings.length)].id
 }
 
 export function applyEffects(game, effects) {
