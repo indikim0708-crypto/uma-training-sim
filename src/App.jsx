@@ -1,0 +1,91 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { character, STAT_KEYS } from './data/character'
+import { events } from './data/events'
+import { races } from './data/races'
+import { applyEffects, conditionFrom, months, rating, runTraining, simulateRace } from './game/engine'
+
+const initialGame = () => ({ month: 1, stats: { ...character.stats }, stamina: 100, condition: character.condition, fans: 0, starts: 0, wins: 0, bestRank: 99, raceResults: [], logs: ['육성 준비가 완료되었습니다.'], phase: 'START', training: null, event: null, eventResult: null, race: null, raceStep: 0, paused: false })
+const addLog = (game, text) => ({ ...game, logs: [text, ...game.logs].slice(0, 5) })
+const formatEffects = (effects) => Object.entries(effects.stats ?? {}).map(([key, value]) => `${key.toUpperCase()} +${value}`).join(' · ') || '특별한 변화 없음'
+
+function App() {
+  const [game, setGame] = useState(initialGame)
+  const [running, setRunning] = useState(false)
+  const currentRace = races.find((race) => race.month === game.month)
+  const nextRace = races.find((race) => race.month >= game.month && !game.raceResults.some((result) => result.month === race.month))
+  const timerText = running && !game.paused ? '다음 달까지 10초' : '진행 대기 중'
+
+  const progressMonth = useCallback(() => {
+    setGame((prev) => {
+      if (prev.phase !== 'TRAINING') return prev
+      const training = runTraining(prev)
+      let next = { ...prev, stamina: training.after, stats: { ...prev.stats }, training, phase: 'TRAINING' }
+      Object.entries(training.gains).forEach(([stat, amount]) => { next.stats[stat] += amount })
+      next = addLog(next, `${prev.month}월: ${training.label} ${Object.entries(training.gains).map(([s, v]) => `${s} +${v}`).join(' ') || '체력 회복'}`)
+      if (currentRace) {
+        const race = simulateRace(next, currentRace)
+        return { ...next, phase: 'RACE_INTRO', race, raceStep: 0, paused: true }
+      }
+      if (Math.random() < 0.35) return { ...next, phase: 'EVENT', event: events[Math.floor(Math.random() * events.length)], paused: true }
+      return { ...next, month: Math.min(6, next.month + 1) }
+    })
+  }, [currentRace])
+
+  useEffect(() => {
+    if (!running || game.paused || game.phase !== 'TRAINING') return undefined
+    const timer = setTimeout(progressMonth, 10000)
+    return () => clearTimeout(timer)
+  }, [running, game.paused, game.phase, progressMonth, game.month])
+
+  useEffect(() => {
+    if (game.phase !== 'RACING') return undefined
+    const timer = setTimeout(() => setGame((prev) => {
+      const nextStep = prev.raceStep + 1
+      if (nextStep >= prev.race.logs.length) return { ...prev, phase: 'RACE_RESULT', paused: true }
+      return { ...prev, raceStep: nextStep }
+    }), 1500)
+    return () => clearTimeout(timer)
+  }, [game.phase, game.raceStep, game.race])
+
+  const start = () => { setGame((prev) => ({ ...prev, phase: 'TRAINING', paused: false })); setRunning(true) }
+  const chooseEvent = (choice) => setGame((prev) => ({ ...applyEffects(prev, choice.effects), phase: 'EVENT', eventResult: { ...choice, effectText: formatEffects(choice.effects) }, paused: true }))
+  const continueEvent = () => setGame((prev) => ({ ...prev, event: null, eventResult: null, phase: 'TRAINING', month: prev.month + 1, paused: false }))
+  const startRace = () => setGame((prev) => ({ ...prev, phase: 'RACING', raceStep: 1, paused: true }))
+  const finishRace = () => setGame((prev) => {
+    const result = { month: prev.month, title: currentRace.title, finish: prev.race.finish }
+    const wins = prev.wins + (result.finish === 1 ? 1 : 0)
+    const fans = prev.fans + (result.finish === 1 ? 900 : Math.max(180, (currentRace.entrants - result.finish + 1) * 110))
+    const next = addLog({ ...prev, starts: prev.starts + 1, wins, fans, bestRank: Math.min(prev.bestRank, result.finish), raceResults: [...prev.raceResults, result], race: null }, `${result.title}: ${result.finish}착`)
+    if (prev.month === 6) return { ...next, phase: 'ENDING', paused: true }
+    return { ...next, phase: 'TRAINING', month: prev.month + 1, paused: false }
+  })
+  const fastForward = () => { if (game.phase === 'TRAINING') progressMonth() }
+
+  const center = useMemo(() => {
+    if (game.phase === 'START') return <div className="start"><span className="eyebrow">6 MONTH TRAINING PROTOTYPE</span><h1>메지로 맥퀸과<br />봄을 향해 달려가세요.</h1><p>자동 훈련과 선택 이벤트, 두 번의 레이스로 완성되는 짧고 밀도 있는 육성 루프입니다.</p><button className="primary" onClick={start}>육성 시작</button></div>
+    if (game.phase === 'ENDING') return <Ending game={game} onRestart={() => { setGame(initialGame()); setRunning(false) }} />
+    if (game.phase === 'RACE_INTRO') return <RaceIntro race={currentRace} onStart={startRace} />
+    if (game.phase === 'RACING' || game.phase === 'RACE_RESULT') return <RaceLog game={game} onContinue={finishRace} />
+    return <Training game={game} />
+  }, [game, currentRace])
+
+  return <main className="app-shell">
+    <header><div className="brand"><span>UMA</span> TRAINING SIM</div><div className="phase">{game.phase.replace('_', ' ')}</div></header>
+    <section className="dashboard">
+      <aside className="card profile"><span className="eyebrow">TRAINEE</span><h2>{character.name}</h2><div className="portrait">M<span>♘</span></div><div className="tags"><span>{character.distance}</span><span>{character.style}</span></div><Stats stats={game.stats} /></aside>
+      <section className="card stage"><div className="month"><span>TRAINING YEAR 1</span><strong>{months[game.month - 1] ?? '완료'}</strong></div>{center}</section>
+      <aside className="card status"><span className="eyebrow">CONDITION</span><h2 className="condition">{game.condition}</h2><div className="bar-label"><span>체력</span><b>{game.stamina}/100</b></div><div className="bar"><i style={{ width: `${game.stamina}%` }} /></div><div className="record"><span>전적</span><b>{game.starts}전 {game.wins}승</b><span>팬 수</span><b>{game.fans.toLocaleString()}명</b><span>최고 순위</span><b>{game.bestRank === 99 ? '-' : `${game.bestRank}착`}</b></div><hr /><span className="eyebrow">NEXT RACE</span>{nextRace ? <><h3>{nextRace.title}</h3><p>{nextRace.distance} · {nextRace.surface} · {nextRace.entrants}명</p><p className="muted">{nextRace.month - game.month}개월 후</p></> : <p className="muted">남은 레이스 없음</p>}</aside>
+    </section>
+    <section className="bottom card"><div className="logs"><span className="eyebrow">RECENT LOG</span>{game.logs.map((log, i) => <p key={i}>{log}</p>)}</div><div className="controls"><button onClick={() => setGame((prev) => ({ ...prev, paused: !prev.paused }))} disabled={!running || game.phase !== 'TRAINING'}>{game.paused ? '재개' : '일시정지'}</button><button onClick={fastForward} disabled={game.phase !== 'TRAINING'}>빠르게 진행</button><span>{timerText}</span></div></section>
+    {game.phase === 'EVENT' && <EventModal game={game} onChoose={chooseEvent} onContinue={continueEvent} />}
+  </main>
+}
+
+function Stats({ stats, initial = false }) { return <div className="stats">{STAT_KEYS.map((key) => <div key={key}><span>{key}</span><b>{stats[key]}</b>{initial && <em>(+{stats[key] - character.stats[key]})</em>}</div>)}</div> }
+function Training({ game }) { const t = game.training; return <div className="training"><span className="eyebrow">AUTO TRAINING</span><h1>{t ? `${t.label} 훈련을 진행했다.` : '첫 훈련을 준비하고 있습니다.'}</h1>{t ? <><div className="gain">{Object.entries(t.gains).map(([stat, amount]) => <b key={stat}>{stat.toUpperCase()} +{amount}</b>)}</div><p className="stamina-change">체력 {t.before} → {t.after}</p></> : <p>10초 후 자동으로 첫 훈련이 시작됩니다.</p>}<div className="ambient">훈련 리듬을 지키며, 다음 무대를 준비합니다.</div></div> }
+function EventModal({ game, onChoose, onContinue }) { const { event, eventResult } = game; return <div className="overlay"><div className="modal"><span className="eyebrow">RANDOM EVENT</span><h2>{event.title}</h2>{eventResult ? <><p>{eventResult.result}</p><div className="actual">{eventResult.effectText}</div><button className="primary" onClick={onContinue}>계속</button></> : <><p>{event.text}</p><div className="choices">{event.choices.map((choice) => <button key={choice.label} onClick={() => onChoose(choice)}><b>{choice.label}</b><small>{choice.hint}</small></button>)}</div></>}</div></div> }
+function RaceIntro({ race, onStart }) { return <div className="race-intro"><span className="eyebrow">RACE DAY</span><h1>{race.title}</h1><div className="race-info"><b>{race.distance}</b><b>{race.surface}</b><b>{race.entrants}명 출전</b></div><p>관중의 환호 속에서, 맥퀸이 출전표에 이름을 올렸다.</p><button className="primary" onClick={onStart}>START</button></div> }
+function RaceLog({ game, onContinue }) { const log = game.race.logs[game.raceStep]; const result = game.phase === 'RACE_RESULT'; return <div className="race-log"><span className="eyebrow">RACE LIVE</span><h2>[ {log.phase} ]</h2><p>{log.text}</p>{log.rank && <div className="rank">현재 순위 <b>{log.rank}위 / {game.race.entrants}</b>{log.stamina && <small>레이스 체력 {log.stamina}%</small>}</div>}{result && <button className="primary" onClick={onContinue}>{game.month === 6 ? '결과 보기' : '육성 계속'}</button>}</div> }
+function Ending({ game, onRestart }) { const [grade, title] = rating(game); const winRate = game.starts ? Math.round(game.wins / game.starts * 100) : 0; return <div className="ending"><span className="eyebrow">TRAINING COMPLETE</span><h1>{character.nameEn}</h1><div className="grade">{grade}</div><h2>「{title}」</h2><Stats stats={game.stats} initial /><div className="summary"><b>{game.starts}전 {game.wins}승 · 승률 {winRate}%</b><span>팬 수 {game.fans.toLocaleString()}명</span>{game.raceResults.map((r) => <span key={r.month}>{r.title} {r.finish}착</span>)}</div><p>6개월의 시간이 맥퀸을 한층 더 단단한 레이서로 만들었습니다.</p><button className="primary" onClick={onRestart}>다시 육성하기</button></div> }
+
+export default App
